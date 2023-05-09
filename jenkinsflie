@@ -1,0 +1,140 @@
+pipeline {
+    agent any
+    environment {
+        GO111MODULE = 'on'
+
+        // GIT VARS
+        GIT_INVENTORY_URL="github.ibm.com/cloudlab/platform-inventory.git"
+        GIT_INVENTORY_GENSEC_URL="github.ibm.com/gensec/platform-inventory.git"
+        GIT_REPORTS_BRANCH="main"
+        GIT_CREDENTIALS="Github-Jirasco"
+        GIT_EMAIL=credentials('jirasco-gituser')
+        GIT_USER=credentials('jirasco-gitpwd')
+       
+
+        // Jira vars
+        // dev
+        //JIRA_API_KEY = credentials('jkevlin_dev_jira_apikey')
+        // prod
+        // JIRA_API__URL="https://jiracloud.swg.usma.ibm.com:8443/"
+        // JIRA_API_USER = credentials('jirasco_user')
+        // JIRA_API_PASS = credentials('jirasco_pwd')
+    }
+
+    stages {
+        stage('Clone Cloudlab Inventory') {
+            steps {
+                script {
+                    sh "mkdir cloudlab_inventory"
+                    dir('cloudlab_inventory') {    
+                        sh "git config --global user.email ${GIT_EMAIL}"
+                        sh "git config --global user.name ${GIT_USER}"
+                        withCredentials([usernamePassword(credentialsId: "${GIT_CREDENTIALS}", usernameVariable: "GUSER", passwordVariable: "GTOKEN")]) {
+                            sh 'git clone https://${GUSER}:${GTOKEN}@${GIT_INVENTORY_URL}'        
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Clone Gensec Inventory') {
+            steps {
+                script {
+                    sh "mkdir gensec_inventory"
+                    dir('gensec_inventory') {    
+                        sh "git config --global user.email ${GIT_EMAIL}"
+                        sh "git config --global user.name ${GIT_USER}"
+                        withCredentials([usernamePassword(credentialsId: "${GIT_CREDENTIALS}", usernameVariable: "GUSER", passwordVariable: "GTOKEN")]) {
+                            sh 'git clone https://${GUSER}:${GTOKEN}@${GIT_INVENTORY_GENSEC_URL}'        
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('pull from cloudlab-inventory') {
+            steps {
+                script {
+                     sh "mkdir cloudlab_inventory"
+                     dir('cloudlab_inventory') {     
+                        sh "git config --global user.email ${GIT_EMAIL}"
+                        sh "git config --global user.name ${GIT_USER}"
+                        withCredentials([usernamePassword(credentialsId: "${GIT_CREDENTIALS}", usernameVariable: "GUSER", passwordVariable: "GTOKEN")]) {
+                            sh 'git clone https://${GUSER}:${GTOKEN}@${GIT_INVENTORY_URL}'        
+                        } 
+                    }
+                }
+            }
+        }
+
+
+        
+        stage('rais-global') {
+            steps {
+                script {
+                    sh 'cd ../../genctl/rias-globals'
+                }
+            }
+        }
+        stage('pull from rais-global') {
+            steps {
+                script {
+                    sh 'git pull origin master'
+                }
+            }
+        }
+        stage('platform-inventory 2') {
+            steps {
+                script {
+                    sh 'cd platform-inventory'
+                }
+            }
+        }
+        stage('3') {
+            steps {
+                script {
+                    sh 'git pull origin main'
+                }
+            }
+        }
+        stage('New Branch') {
+            steps {
+                script {
+                    sh 'git checkout -b import-2023-02-13'
+                }
+            }
+        }
+        stage('2') {
+            steps {
+                script {
+                    sh 'cd hack/import-cloudlab'
+                }
+            }
+        }
+        stage('go-build') {
+            steps {
+                script {
+                    sh 'go build'
+                }
+            }
+        }
+        stage('Import') {
+            steps {
+                script {
+                    sh './import-cloudlab undercloud'
+                    sh './import-cloudlab mzone'
+                    sh './import-cloudlab rias'
+                }
+            }
+        }
+        stage('Push') {
+            steps {
+                script {
+                    withCredentials([usernamePassword(credentialsId: "${GIT_CREDENTIALS}", usernameVariable: "${GIT_USERNAME}", passwordVariable: "${GIT_PASSWORD}")]) {
+                        sh 'git push origin import-2023-02-13'
+                    }
+                }
+            }
+        }
+    }
+}
